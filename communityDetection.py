@@ -28,9 +28,8 @@ def load_network(file_path: str) -> nx.Graph:
 # Applying the Louvain Algorithm
 def detect_communities_louvain(G: nx.Graph) -> List[List[int]]:
     partition = community_louvain.best_partition(G)
-    G.get_edge_data(1, 2)
     # Convert partition dictionary to list of lists for NMI calculation
-    community_to_nodes = {}
+    community_to_nodes: Dict[int, List[int]] = {}
     for node, community in partition.items():
         if community not in community_to_nodes:
             community_to_nodes[community] = []

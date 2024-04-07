@@ -2,9 +2,10 @@
 from sklearn.metrics.cluster import normalized_mutual_info_score
 import argparse
 
+from typing import List, Set, Dict, Tuple, Any
 
 # Reading the Ground-Truth Community Data
-def load_ground_truth(file_path):
+def load_ground_truth(file_path: str) -> List[List[int]]:
     node_to_community = {}
     with open(file_path, 'r') as f:
         for line in f:
@@ -22,7 +23,7 @@ def load_ground_truth(file_path):
 
 
 # Calculating NMI Score
-def calculate_nmi(true_communities, detected_communities):
+def calculate_nmi(true_communities: List[List[int]], detected_communities: List[List[int]]) -> float:
     # Flatten the lists and create label vectors
     true_labels = {}
     for i, community in enumerate(true_communities):
@@ -41,7 +42,7 @@ def calculate_nmi(true_communities, detected_communities):
     return normalized_mutual_info_score(true_labels_vector, detected_labels_vector)
 
 
-def eval(network_file_path):
+def eval(network_file_path: str) -> float:
     # Replace or append file extensions as necessary to construct paths
     community_file_path = network_file_path.replace('.dat', '.cmty')
     ground_truth_file_path = network_file_path.replace('.dat', '-c.dat')
