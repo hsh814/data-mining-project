@@ -1,0 +1,9 @@
+.DS_Store
+
+
+ds.zip
+
+data/*
+!data/TC1.zip
+!data/TC2.zip
+
