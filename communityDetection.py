@@ -4,15 +4,16 @@ import random
 import numpy as np
 import argparse
 
-
 from sklearn.metrics.cluster import normalized_mutual_info_score
+
+from typing import List, Set, Dict, Tuple, Any
 
 random_seed = 42
 random.seed(random_seed)
 np.random.seed(random_seed)
 
 # Reading the Network Data
-def load_network(file_path):
+def load_network(file_path: str) -> nx.Graph:
     G = nx.Graph()
     with open(file_path, 'r') as f:
         for line in f:
@@ -25,8 +26,9 @@ def load_network(file_path):
 
 
 # Applying the Louvain Algorithm
-def detect_communities_louvain(G):
+def detect_communities_louvain(G: nx.Graph) -> List[List[int]]:
     partition = community_louvain.best_partition(G)
+    G.get_edge_data(1, 2)
     # Convert partition dictionary to list of lists for NMI calculation
     community_to_nodes = {}
     for node, community in partition.items():
@@ -37,7 +39,7 @@ def detect_communities_louvain(G):
 
 
 # Step 5: Save the result
-def save_communities_to_file(communities, file_path):
+def save_communities_to_file(communities: List[List[int]], file_path: str):
     # Convert the list of lists into a dictionary with community as key and nodes as values
     community_dict = {}
     for community_id, nodes in enumerate(communities):
@@ -55,16 +57,16 @@ def save_communities_to_file(communities, file_path):
 
 # Load the data
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Detect communities in a network.')
+    parser.add_argument('--networkFile', '-n', type=str, help='The path of the network file.', default="./data/1-1.dat")
+    args = parser.parse_args()
 
-parser = argparse.ArgumentParser(description='Detect communities in a network.')
-parser.add_argument('--networkFile', '-n', type=str, help='The path of the network file.', default="./data/1-1.dat")
-args = parser.parse_args()
+    community_file_path = args.networkFile.replace('.dat', '.cmty')
 
-community_file_path = args.networkFile.replace('.dat', '.cmty')
+    G = load_network(args.networkFile)
 
-G = load_network(args.networkFile)
+    # Detect communities using Louvain method
+    detected_communities = detect_communities_louvain(G)
 
-# Detect communities using Louvain method
-detected_communities = detect_communities_louvain(G)
-
-save_communities_to_file(detected_communities, community_file_path)
+    save_communities_to_file(detected_communities, community_file_path)
