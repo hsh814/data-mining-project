@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 pushd data
   unzip TC1.zip

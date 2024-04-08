@@ -14,6 +14,6 @@ python3 evaluation.py
 
 # Run project
 cd ..
-python3 communityDetection.py -n ./data/1-1.dat
-python3 evaluation.py -n ./data/1-1.dat
+python3 communityDetection.py -n ./data/TC1-1/1-1.dat
+python3 evaluation.py -n ./data/TC1-1/1-1.dat
 ```
