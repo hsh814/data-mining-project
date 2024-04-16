@@ -22,9 +22,6 @@ def load_network(file_path: str) -> nx.Graph:
                 G.add_edge(int(parts[0]), int(parts[1]))
     return G
 
-
-
-
 # Applying the Louvain Algorithm
 def detect_communities_louvain(G: nx.Graph) -> List[List[int]]:
     partition = community_louvain.best_partition(G)
@@ -35,6 +32,48 @@ def detect_communities_louvain(G: nx.Graph) -> List[List[int]]:
             community_to_nodes[community] = []
         community_to_nodes[community].append(node)
     return list(community_to_nodes.values())
+
+class GraphKMeans:
+    G: nx.Graph
+    dist: Dict[int, Tuple[Dict[int, int], Dict[int, List[int]]]]
+    
+    def __init__(self, G: nx.Graph):
+        # Update weights
+        for edge in G.edges():
+            G[edge[0]][edge[1]]['weight'] = min(G.degree(edge[0]), G.degree(edge[1]))
+        self.G = G
+        cutoff = np.log2(int(len(G.nodes())))
+        # Compute all pairs shortest path
+        self.dist = dict(nx.all_pairs_dijkstra(G, cutoff=max(cutoff, 10), weight='weight'))
+        
+    def get_distance(self, na: int, nb: int) -> int:
+        if nb in self.dist[na][0]:
+            return self.dist[na][0][nb]
+        return len(self.G.nodes()) + 1
+
+    def k_means(self, k: int) -> List[List[int]]:
+        centroids = random.sample(self.G.nodes(), k)
+        prev_centroids = list()
+        iter = 1
+        while centroids != prev_centroids:
+            print(f"Iteration {iter}")
+            iter += 1
+            clusters = [[] for _ in range(k)]
+            for node in G.nodes():
+                distances = [self.get_distance(node, centroid) for centroid in centroids]
+                closest_centroid_index = distances.index(min(distances))
+                clusters[closest_centroid_index].append(node)
+            prev_centroids = centroids
+            centroids = []
+            for cluster in clusters:
+                # Compute the centroid of the cluster
+                centroids.append(cluster[np.argmin([np.mean([self.get_distance(node, other) for other in cluster]) for node in cluster])])
+        return clusters
+
+    def detect_communities_kmeans(self) -> List[List[int]]:
+        k = int(np.sqrt(len(self.G.nodes())))
+        clusters = self.k_means(k)
+        return clusters
 
 
 # Step 5: Save the result
@@ -59,13 +98,18 @@ def save_communities_to_file(communities: List[List[int]], file_path: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Detect communities in a network.')
     parser.add_argument('--networkFile', '-n', type=str, help='The path of the network file.', default="./data/1-1.dat")
+    parser.add_argument("--method", "-m", type=str, help="The method to use for community detection.", default="kmeans")
     args = parser.parse_args()
 
     community_file_path = args.networkFile.replace('.dat', '.cmty')
 
     G = load_network(args.networkFile)
 
-    # Detect communities using Louvain method
-    detected_communities = detect_communities_louvain(G)
+    if args.method == "kmeans":
+        gkm = GraphKMeans(G)
+        detected_communities = gkm.detect_communities_kmeans()
+    else:
+        # Detect communities using Louvain method
+        detected_communities = detect_communities_louvain(G)
 
     save_communities_to_file(detected_communities, community_file_path)

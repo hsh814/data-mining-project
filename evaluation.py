@@ -19,6 +19,7 @@ def load_ground_truth(file_path: str) -> List[List[int]]:
         if community not in community_to_nodes:
             community_to_nodes[community] = []
         community_to_nodes[community].append(node)
+    print(f"Found {len(community_to_nodes)} communities / {len(node_to_community)} nodes in {file_path}")
     return list(community_to_nodes.values())
 
 
