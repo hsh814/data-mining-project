@@ -38,9 +38,12 @@ class GraphKMeans:
     dist: Dict[int, Tuple[Dict[int, int], Dict[int, List[int]]]]
     
     def __init__(self, G: nx.Graph):
+        def dist_func(a: int, b: int):
+            dist = 1
+            return int(dist)
         # Update weights
         for edge in G.edges():
-            G[edge[0]][edge[1]]['weight'] = min(G.degree(edge[0]), G.degree(edge[1]))
+            G[edge[0]][edge[1]]['weight'] = dist_func(G.degree(edge[0]), G.degree(edge[1]))
         self.G = G
         cutoff = np.log2(int(len(G.nodes())))
         # Compute all pairs shortest path
@@ -56,7 +59,7 @@ class GraphKMeans:
         prev_centroids = list()
         iter = 1
         while centroids != prev_centroids:
-            print(f"Iteration {iter}")
+            print(f"Iteration {iter}: {centroids} vs {prev_centroids}")
             iter += 1
             clusters = [[] for _ in range(k)]
             for node in G.nodes():
