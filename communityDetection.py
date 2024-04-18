@@ -3,6 +3,7 @@ import community as community_louvain
 import random
 import numpy as np
 import argparse
+import multiprocessing as mp
 
 from sklearn.metrics.cluster import normalized_mutual_info_score
 
@@ -35,23 +36,50 @@ def detect_communities_louvain(G: nx.Graph) -> List[List[int]]:
 
 class GraphKMeans:
     G: nx.Graph
-    dist: Dict[int, Tuple[Dict[int, int], Dict[int, List[int]]]]
+    dist: Dict[int, Tuple[Dict[int, int]]]
+    cutoff: float
+    count: int
     
+    def compute_distance(self, n: int):
+        return n, nx.single_source_dijkstra(self.G, n, cutoff=self.cutoff, weight="weight")[0]
+    
+    def update_distances(self, res):
+        self.dist[res[0]] = res[1]
+    
+    def precompute_distances(self):
+        pool = mp.Pool(mp.cpu_count())
+        for n in G.nodes():
+            pool.apply_async(self.compute_distance, args=(n,), callback=self.update_distances)
+        pool.close()
+        pool.join()
+        
     def __init__(self, G: nx.Graph):
-        def dist_func(a: int, b: int):
-            dist = 1
-            return int(dist)
+        self.count = 0
         # Update weights
+        self.cutoff = max(10.0, np.log2(len(G.nodes())))
         for edge in G.edges():
-            G[edge[0]][edge[1]]['weight'] = dist_func(G.degree(edge[0]), G.degree(edge[1]))
+            G[edge[0]][edge[1]]['weight'] = 1
+        print("[stat] [weights updated]")
         self.G = G
-        cutoff = np.log2(int(len(G.nodes())))
         # Compute all pairs shortest path
-        self.dist = dict(nx.all_pairs_dijkstra(G, cutoff=max(cutoff, 10), weight='weight'))
+        self.dist = dict()
+        # print("[stat] [precomputing distances]")
+        # self.precompute_distances()
         
     def get_distance(self, na: int, nb: int) -> int:
-        if nb in self.dist[na][0]:
-            return self.dist[na][0][nb]
+        if na == nb:
+            return 0
+        if na in self.dist and nb in self.dist[na]:
+            return self.dist[na][nb]
+        if nb in self.dist and na in self.dist[nb]:
+            return self.dist[nb][na]
+        if na not in self.dist:
+            dist, paths = nx.single_source_dijkstra(self.G, na, cutoff=self.cutoff, weight="weight")
+            self.dist[na] = dist
+            self.count += 1
+            print(f"[stat] [na {na}] [nb {nb}] [done {self.count}] [total {len(G.nodes())}]")
+        if nb in self.dist[na]:
+            return self.dist[na][nb]
         return len(self.G.nodes()) + 1
 
     def k_means(self, k: int) -> List[List[int]]:
@@ -63,8 +91,8 @@ class GraphKMeans:
             iter += 1
             clusters = [[] for _ in range(k)]
             for node in G.nodes():
-                distances = [self.get_distance(node, centroid) for centroid in centroids]
-                closest_centroid_index = distances.index(min(distances))
+                distances = [self.get_distance(centroid, node) for centroid in centroids]
+                closest_centroid_index = np.argmin(distances)
                 clusters[closest_centroid_index].append(node)
             prev_centroids = centroids
             centroids = []
