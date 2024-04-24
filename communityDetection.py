@@ -48,7 +48,7 @@ class GraphKMeans:
     
     def precompute_distances(self):
         pool = mp.Pool(mp.cpu_count())
-        for n in G.nodes():
+        for n in self.G.nodes():
             pool.apply_async(self.compute_distance, args=(n,), callback=self.update_distances)
         pool.close()
         pool.join()
@@ -77,7 +77,7 @@ class GraphKMeans:
             dist, paths = nx.single_source_dijkstra(self.G, na, cutoff=self.cutoff, weight="weight")
             self.dist[na] = dist
             self.count += 1
-            print(f"[stat] [na {na}] [nb {nb}] [done {self.count}] [total {len(G.nodes())}]")
+            print(f"[stat] [na {na}] [nb {nb}] [done {self.count}] [total {len(self.G.nodes())}]")
         if nb in self.dist[na]:
             return self.dist[na][nb]
         return len(self.G.nodes()) + 1
@@ -90,7 +90,7 @@ class GraphKMeans:
             print(f"Iteration {iter}: {centroids} vs {prev_centroids}")
             iter += 1
             clusters = [[] for _ in range(k)]
-            for node in G.nodes():
+            for node in self.G.nodes():
                 distances = [self.get_distance(centroid, node) for centroid in centroids]
                 closest_centroid_index = np.argmin(distances)
                 clusters[closest_centroid_index].append(node)
