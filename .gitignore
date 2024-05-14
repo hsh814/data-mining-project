@@ -8,3 +8,5 @@ data/*
 !data/TC1.zip
 !data/TC2.zip
 
+__pycache__/
+tmp/
