@@ -53,6 +53,27 @@ def eval(network_file_path: str) -> float:
     nmi_score = calculate_nmi(true_communities, detected_communities)
     return nmi_score
 
+def print_cluster(clusters, title):
+    import matplotlib.pyplot as plt
+    import matplotlib.cm as cm
+    import networkx as nx
+    labels = dict()
+    for i, community in enumerate(clusters):
+        for node in community:
+            labels[node] = i
+    pos = nx.spring_layout(G)
+    cmap = cm.get_cmap('viridis', len(clusters))
+    nx.draw_networkx_nodes(G, pos, labels.keys(), node_size=10, cmap=cmap, node_color=list(labels.values()))
+    nx.draw_networkx_edges(G, pos, alpha=0.5)
+    # cluster_sizes = [len(c) for c in clusters]
+    # cluster_numbers = [i for i in range(len(clusters))]
+    # plt.figure(figsize=(10, 6))
+    # plt.bar(cluster_numbers, cluster_sizes, color='skyblue')
+    # plt.xlabel('cluster no')
+    # plt.ylabel('node count')
+    # plt.title('cluster results')
+    plt.savefig(title + '.png')
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Detect communities in a network.')
     parser.add_argument('--networkFile', '-n', type=str, help='The path of the network file.', default="./data/1-1.dat")
@@ -60,3 +81,18 @@ if __name__ == "__main__":
 
     network_file_path = args.networkFile
     print(network_file_path, eval(network_file_path))
+    import communityDetection
+    import networkx as nx
+    G = nx.karate_club_graph()
+    # ground_truth = load_ground_truth(network_file_path.replace('.dat', '-c.dat'))
+    # print_cluster(ground_truth, "groundtruth")
+    louvain = communityDetection.detect_communities_louvain(G)
+    # louvain = load_ground_truth(network_file_path.replace('.dat', '-louvain.cmty'))
+    print_cluster(louvain, "louvain")
+    # k_1 = load_ground_truth(network_file_path.replace('.dat', '-k-1.cmty'))
+    k_1 = communityDetection.GraphKMeans(G).detect_communities_kmeans()
+    print_cluster(k_1, "k1")
+    # k_min = load_ground_truth(network_file_path.replace('.dat', '-k-min.cmty'))
+    # print_cluster(k_min, "kmin")
+    # k_avg = load_ground_truth(network_file_path.replace('.dat', '-k-avg.cmty'))
+    # print_cluster(k_avg, "kavg")
