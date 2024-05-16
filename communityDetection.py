@@ -28,9 +28,8 @@ class GraphScan:
     epsilon: float
     core_threshold: int
 
-    def __init__(self, G: nx.Graph, epsilon: float = 0.25, core_threshold: int = 1):
+    def __init__(self, G: nx.Graph, epsilon: float = 0.25, core_threshold: int = 3):
         self.count = 0
-        # Update weights
         self.G = G
         self.epsilon = epsilon
         self.core_threshold = core_threshold
@@ -165,6 +164,7 @@ class GraphScan:
         # Assign hubs and outliers to clusters
         print(f"[stat] [clusters {len(clusters)}] [hubs {len(hubs)}] [outliers {len(outliers)}]")
         self.assign_to_clusters(non_members, clusters)
+        print(f"[stat] [final] [clusters {len(clusters)}]")
         return clusters
 
     def detect_communities(self) -> List[List[int]]:
