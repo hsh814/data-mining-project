@@ -220,15 +220,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Detect communities in a network.')
     parser.add_argument('--networkFile', '-n', type=str, help='The path of the network file.', default="./data/1-1.dat")
     parser.add_argument("--method", "-m", type=str, help="The method to use for community detection.", default="scan")
+    parser.add_argument("--out", "-o", type=str, help="The path to save the community file.", default="")
+    parser.add_argument("--epsilon", "-e", type=float, help="The epsilon value for GraphScan.", default=0.25)
+    parser.add_argument("--coreThreshold", "-c", type=int, help="The core threshold value for GraphScan.", default=3)
     args = parser.parse_args()
 
     community_file_path = args.networkFile.replace('.dat', '.cmty')
+    if args.out != "":
+        community_file_path = args.out
 
     G = load_network(args.networkFile)
 
     # Detect communities using Louvain method
     if args.method == "scan":
-        gs = GraphScan(G)
+        gs = GraphScan(G, epsilon=args.epsilon, core_threshold=args.coreThreshold)
         detected_communities = gs.detect_communities()
     else:
         # Detect communities using Louvain method

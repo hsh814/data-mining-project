@@ -43,9 +43,9 @@ def calculate_nmi(true_communities: List[List[int]], detected_communities: List[
     return normalized_mutual_info_score(true_labels_vector, detected_labels_vector)
 
 
-def eval(network_file_path: str) -> float:
+def eval(network_file_path: str, community_file_path: str) -> float:
     # Replace or append file extensions as necessary to construct paths
-    community_file_path = network_file_path.replace('.dat', '.cmty')
+    # community_file_path = network_file_path.replace('.dat', '.cmty')
     ground_truth_file_path = network_file_path.replace('.dat', '-c.dat')
 
     detected_communities = load_ground_truth(community_file_path)
@@ -56,7 +56,12 @@ def eval(network_file_path: str) -> float:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Detect communities in a network.')
     parser.add_argument('--networkFile', '-n', type=str, help='The path of the network file.', default="./data/1-1.dat")
+    parser.add_argument("--result", "-r", type=str, help="The path to save the result file.", default="")
     args = parser.parse_args()
 
     network_file_path = args.networkFile
-    print(network_file_path, eval(network_file_path))
+    community_file_path = network_file_path.replace('.dat', '.cmty')
+    if args.result != "":
+        community_file_path = args.result
+    
+    print(network_file_path, eval(network_file_path, community_file_path))
