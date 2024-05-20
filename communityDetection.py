@@ -27,12 +27,14 @@ class GraphScan:
     G: nx.Graph
     epsilon: float
     core_threshold: int
+    use_modularity: bool
 
-    def __init__(self, G: nx.Graph, epsilon: float = 0.25, core_threshold: int = 3):
+    def __init__(self, G: nx.Graph, epsilon: float = 0.25, core_threshold: int = 3, use_modularity: bool = False):
         self.count = 0
         self.G = G
         self.epsilon = epsilon
         self.core_threshold = core_threshold
+        self.use_modularity = use_modularity
         
     def get_neighbors(self, node: int) -> Set[int]:
         return set(self.G.neighbors(node))
@@ -92,6 +94,64 @@ class GraphScan:
             if self.in_cluster(n):
                 belong.add(self.G.nodes[n]['cid'])
         return len(belong) > 1
+    
+    def calculate_modularity(self, partition: Dict[int, int], clusters: Dict[int, List[int]], non_members: Set[int]) -> float:
+        cid = len(clusters) + 1
+        non_mem = 0
+        for node in non_members:
+            if node not in partition:
+                partition[node] = cid
+                cid += 1
+                non_mem += 1
+        res = community_louvain.modularity(partition, self.G)
+        print(f"[modularity] [{res}] [cid {cid}] [clusters {len(clusters)}] [non_mem {non_mem}]")
+        return res
+
+    def assign_to_clusters_by_modularity(self, non_members: Set[int], clusters: Dict[int, List[int]]):
+        partition = dict()
+        for cid in clusters:
+            for node in clusters[cid]:
+                partition[node] = cid
+        best_modularity = self.calculate_modularity(partition.copy(), clusters, non_members)
+        for hub in non_members:
+            neighbors = self.get_neighbors(hub)
+            belong = dict()
+            for n in neighbors:
+                if self.in_cluster(n):
+                    cid = self.G.nodes[n]['cid']
+                    if cid in belong:
+                        belong[cid] += 1
+                    else:
+                        belong[self.G.nodes[n]['cid']] = 1
+            # If no neighbors belong to any cluster, create a new cluster
+            if len(belong) == 0:
+                new_cid = len(clusters) + 1
+                self.add_core(hub, clusters, new_cid)
+                partition[hub] = new_cid
+                # print(f"[out] [new] [{hub}] to [{new_cid}]")
+            else:
+                best_cid = None
+                for cid in belong:
+                    # Temporarily add the hub to this cluster and calculate the modularity
+                    clusters[cid].append(hub)
+                    partition[hub] = cid
+                    temp_modularity = self.calculate_modularity(partition.copy(), clusters, non_members)
+                    # Remove the hub after testing
+                    clusters[cid].remove(hub)
+                    partition.pop(hub)
+                    if temp_modularity > best_modularity:
+                        best_modularity = temp_modularity
+                        best_cid = cid
+                if best_cid is not None:
+                    self.add_to_cluster(hub, clusters, best_cid)
+                    partition[hub] = best_cid
+                    # print(f"[add] [{hub}] to [{best_cid}]")
+                else:
+                    # If no better cluster is found, create a new cluster
+                    new_cid = len(clusters) + 1
+                    self.add_core(hub, clusters, new_cid)
+                    partition[hub] = new_cid
+                    # print(f"[hub] [new] [{hub}] to [{new_cid}]")
     
     def assign_to_clusters(self, non_members: Set[int], clusters: Dict[int, List[int]]):
         for hub in non_members:
@@ -163,7 +223,10 @@ class GraphScan:
                 self.G.nodes[n]['type'] = NodeType.Outlier
         # Assign hubs and outliers to clusters
         print(f"[stat] [clusters {len(clusters)}] [hubs {len(hubs)}] [outliers {len(outliers)}]")
-        self.assign_to_clusters(non_members, clusters)
+        if self.use_modularity:
+            self.assign_to_clusters_by_modularity(non_members, clusters)
+        else:
+            self.assign_to_clusters(non_members, clusters)
         print(f"[stat] [final] [clusters {len(clusters)}]")
         return clusters
 
@@ -223,6 +286,7 @@ if __name__ == "__main__":
     parser.add_argument("--out", "-o", type=str, help="The path to save the community file.", default="")
     parser.add_argument("--epsilon", "-e", type=float, help="The epsilon value for GraphScan.", default=0.25)
     parser.add_argument("--coreThreshold", "-c", type=int, help="The core threshold value for GraphScan.", default=3)
+    parser.add_argument("--useModularity", "-u", type=bool, help="Use modularity for GraphScan.", default=False)
     args = parser.parse_args()
 
     community_file_path = args.networkFile.replace('.dat', '.cmty')
@@ -233,7 +297,7 @@ if __name__ == "__main__":
 
     # Detect communities using Louvain method
     if args.method == "scan":
-        gs = GraphScan(G, epsilon=args.epsilon, core_threshold=args.coreThreshold)
+        gs = GraphScan(G, epsilon=args.epsilon, core_threshold=args.coreThreshold, use_modularity=args.useModularity)
         detected_communities = gs.detect_communities()
     else:
         # Detect communities using Louvain method
