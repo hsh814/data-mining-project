@@ -35,6 +35,7 @@ class GraphScan:
         self.epsilon = epsilon
         self.core_threshold = core_threshold
         self.use_modularity = use_modularity
+        print(f"[init] [epsilon {epsilon}] [core_threshold {core_threshold}] [use_modularity {use_modularity}]")
         
     def get_neighbors(self, node: int) -> Set[int]:
         return set(self.G.neighbors(node))
@@ -286,7 +287,7 @@ if __name__ == "__main__":
     parser.add_argument("--out", "-o", type=str, help="The path to save the community file.", default="")
     parser.add_argument("--epsilon", "-e", type=float, help="The epsilon value for GraphScan.", default=0.25)
     parser.add_argument("--coreThreshold", "-c", type=int, help="The core threshold value for GraphScan.", default=3)
-    parser.add_argument("--useModularity", "-u", type=bool, help="Use modularity for GraphScan.", default=False)
+    parser.add_argument("--useModularity", "-u", action="store_true", help="Use modularity for GraphScan.")
     args = parser.parse_args()
 
     community_file_path = args.networkFile.replace('.dat', '.cmty')
