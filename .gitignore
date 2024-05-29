@@ -7,6 +7,8 @@ ds.zip
 data/*
 !data/TC1.zip
 !data/TC2.zip
+!data/TC1-all_including-GT.zip
+!data/real-world-dataset.zip
 
 __pycache__/
 tmp/
