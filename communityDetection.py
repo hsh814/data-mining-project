@@ -115,7 +115,19 @@ class GraphScan:
         print(f"[modularity] [{res}] [cid {cid}] [clusters {len(clusters)}] [non_mem {non_mem}]")
         return res
     
-    def calculate_modularity_change(self, clusters: Dict[int, List[int]], node: int, cluster: int) -> float:
+    def calculate_modularity_cluster(self, cluster: List[int]) -> Tuple[int, int]:
+        in_degree = 0
+        tot_degree = 0
+        for u in cluster:
+            tot_degree += self.G.degree(u)
+            for v in cluster:
+                if u == v:
+                    continue
+                if self.G.has_edge(u, v):
+                    in_degree += 1
+        return in_degree, tot_degree
+    
+    def calculate_modularity_change(self, clusters: Dict[int, List[int]], cache: Dict[int, float], node: int, cluster: int) -> float:
         # Calculate the modularity change if node is added to cluster
         c2 = set(clusters[cluster])
         # c2.add(node)
@@ -294,6 +306,66 @@ def save_communities_to_file(communities: List[List[int]], file_path: str):
             f.write(f"{node} {community_id}\n")
 
 
+class ParameterAdjustment:
+    def __init__(self, G: nx.Graph):
+        self.G = G
+        self.epsilon = 0.0
+        self.core_threshold = 0
+    
+    def heuristic(self) -> Tuple[float, int]:
+        # partition = community_louvain.best_partition(self.G)
+        # community_to_nodes: Dict[int, List[int]] = {}
+        # for node, community in partition.items():
+        #     if community not in community_to_nodes:
+        #         community_to_nodes[community] = []
+        #     community_to_nodes[community].append(node)
+        # find proper epsilon
+        epsilon = 0.0
+        gs = GraphScan(self.G.copy(), epsilon=epsilon, core_threshold=3, use_modularity=False)
+        eps_dict: Dict[int, List[float]] = dict()
+        for node in gs.G.nodes():
+            for n in gs.get_neighbors(node):
+                sim = gs.similarity(node, n)
+                if node not in eps_dict:
+                    eps_dict[node] = list()
+                eps_dict[node].append(sim)
+        # sort the similarities
+        eps_list = list()
+        for node, val in eps_dict.items():
+            val.sort(reverse=True)
+            core = len(val)
+            if core >= 3:
+                eps = val[2]
+                eps_list.append(eps)
+        eps_list.sort()
+        epsilon = eps_list[int(len(eps_list) * 0.25)]
+        print(f"[epsilon] [{epsilon}]")
+        return epsilon, 3
+
+    def find_parameters(self):
+        max_modularity = 0.0
+        best_epsilon = 0.0
+        best_core_threshold = 0
+        best_use_modularity = False
+        for epsilon in np.arange(0.1, 0.5, 0.025):
+            for core_threshold in range(2, 6):
+                for use_modularity in [True, False]:
+                    gs = GraphScan(self.G.copy(), epsilon=epsilon, core_threshold=core_threshold, use_modularity=use_modularity)
+                    detected_communities = gs.detect_communities()
+                    partition = {}
+                    for cid, nodes in enumerate(detected_communities):
+                        for node in nodes:
+                            partition[node] = cid
+                    modularity = community_louvain.modularity(partition, G)
+                    if modularity > max_modularity:
+                        max_modularity = modularity
+                        best_epsilon = epsilon
+                        best_core_threshold = core_threshold
+                        best_use_modularity = use_modularity
+        print(f"[best] [epsilon {best_epsilon}] [core_threshold {best_core_threshold}] [use_modularity {best_use_modularity}] [modularity {max_modularity}]")
+        return best_epsilon, best_core_threshold, best_use_modularity
+
+
 # Load the data
 
 if __name__ == "__main__":
@@ -314,7 +386,9 @@ if __name__ == "__main__":
 
     # Detect communities using Louvain method
     if args.method == "scan":
-        gs = GraphScan(G, epsilon=args.epsilon, core_threshold=args.coreThreshold, use_modularity=args.useModularity)
+        pa = ParameterAdjustment(G)
+        epsilon, core_threshlod = pa.heuristic()
+        gs = GraphScan(G, epsilon=epsilon, core_threshold=core_threshlod, use_modularity=True)
         detected_communities = gs.detect_communities()
     else:
         # Detect communities using Louvain method
