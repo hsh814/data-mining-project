@@ -127,7 +127,7 @@ class GraphScan:
                     in_degree += 1
         return in_degree, tot_degree
     
-    def calculate_modularity_change(self, clusters: Dict[int, List[int]], cache: Dict[int, float], node: int, cluster: int) -> float:
+    def calculate_modularity_change(self, clusters: Dict[int, List[int]], cache: Dict[int, float], node: int, cluster: int) -> Tuple[float, int, int]:
         # Calculate the modularity change if node is added to cluster
         c2 = set(clusters[cluster])
         # c2.add(node)
@@ -136,21 +136,16 @@ class GraphScan:
         for u in self.get_neighbors(node):
             if u in c2:
                 node_degree_in_cluster += 1
-        in_degree = 0
-        tot_degree = 0
-        for u in c2:
-            tot_degree += self.G.degree(u)
-            for v in c2:
-                if u == v:
-                    continue
-                if self.G.has_edge(u, v):
-                    in_degree += 1
+        if cluster not in cache:
+            cache[cluster] = self.calculate_modularity_cluster(clusters[cluster])
+        in_degree, tot_degree = cache[cluster]
         in_degree_new = in_degree + 2 * node_degree_in_cluster
         tot_degree_new = tot_degree + node_degree
         delta = (in_degree_new / (self.total_degree) - (tot_degree_new / (self.total_degree)) ** 2) - (in_degree / (self.total_degree) - (tot_degree / (self.total_degree)) ** 2)
-        return delta
+        return delta, in_degree_new, tot_degree_new
 
     def assign_to_clusters_by_modularity(self, non_members: Set[int], clusters: Dict[int, List[int]]):
+        cache = dict()
         for hub in non_members:
             neighbors = self.get_neighbors(hub)
             belong = dict()
@@ -168,14 +163,20 @@ class GraphScan:
             else:
                 best_delta = 0.0
                 best_cid = -1
+                best_in = 0
+                best_tot = 0
                 for cid in belong:
                     # Temporarily add the hub to this cluster and calculate the modularity
-                    delta = self.calculate_modularity_change(clusters, hub, cid)
+                    delta, in_degree_new, tot_degree_new = self.calculate_modularity_change(clusters, cache, hub, cid)
+                    print(f"[delta] [{hub}] [{cid}] [{delta}] [{best_delta}]")
                     if delta > best_delta:
                         best_delta = delta
                         best_cid = cid
+                        best_in = in_degree_new
+                        best_tot = tot_degree_new
                 if best_cid >= 0:
                     self.add_to_cluster(hub, clusters, best_cid)
+                    cache[best_cid] = (best_in, best_tot)
                 else:
                     # If no better cluster is found, create a new cluster
                     print(f"[new] [{hub}] to [{len(clusters) + 1}]")
@@ -387,7 +388,8 @@ if __name__ == "__main__":
     # Detect communities using Louvain method
     if args.method == "scan":
         pa = ParameterAdjustment(G)
-        epsilon, core_threshlod = pa.heuristic()
+        # epsilon, core_threshlod = pa.heuristic()
+        epsilon, core_threshlod = 0.25, 3
         gs = GraphScan(G, epsilon=epsilon, core_threshold=core_threshlod, use_modularity=True)
         detected_communities = gs.detect_communities()
     else:
