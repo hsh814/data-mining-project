@@ -28,6 +28,9 @@ class GraphScan:
     epsilon: float
     core_threshold: int
     use_modularity: bool
+    total_nodes: int
+    total_edges: int
+    total_degree: int
 
     def __init__(self, G: nx.Graph, epsilon: float = 0.25, core_threshold: int = 3, use_modularity: bool = False):
         self.count = 0
@@ -35,6 +38,10 @@ class GraphScan:
         self.epsilon = epsilon
         self.core_threshold = core_threshold
         self.use_modularity = use_modularity
+        self.total_nodes = G.number_of_nodes()
+        self.total_edges = G.number_of_edges()
+        self.total_degree = self.total_edges * 2
+        print(self.total_degree, self.total_nodes, self.total_edges)
         print(f"[init] [epsilon {epsilon}] [core_threshold {core_threshold}] [use_modularity {use_modularity}]")
         
     def get_neighbors(self, node: int) -> Set[int]:
@@ -107,6 +114,29 @@ class GraphScan:
         res = community_louvain.modularity(partition, self.G)
         print(f"[modularity] [{res}] [cid {cid}] [clusters {len(clusters)}] [non_mem {non_mem}]")
         return res
+    
+    def calculate_modularity_change(self, partition: Dict[int, int], clusters: Dict[int, List[int]], non_members: Set[int], node: int, cluster: int):
+        # Calculate the modularity change if node is added to cluster
+        c2 = set(clusters[cluster])
+        # c2.add(node)
+        node_degree = self.G.degree(node)
+        node_degree_in_cluster = 0
+        for u in self.get_neighbors(node):
+            if u in c2:
+                node_degree_in_cluster += 1
+        in_degree = 0
+        tot_degree = 0
+        for u in c2:
+            tot_degree += self.G.degree(u)
+            for v in c2:
+                if u == v:
+                    continue
+                if self.G.has_edge(u, v):
+                    in_degree += 1
+        in_degree_new = in_degree + 2 * node_degree_in_cluster
+        tot_degree_new = tot_degree + node_degree
+        delta = (in_degree_new / (self.total_degree) - (tot_degree_new / (self.total_degree)) ** 2) - (in_degree / (self.total_degree) - (tot_degree / (self.total_degree)) ** 2)
+        return delta
 
     def assign_to_clusters_by_modularity(self, non_members: Set[int], clusters: Dict[int, List[int]]):
         partition = dict()
@@ -134,9 +164,11 @@ class GraphScan:
                 best_cid = None
                 for cid in belong:
                     # Temporarily add the hub to this cluster and calculate the modularity
+                    delta = self.calculate_modularity_change(partition, clusters, non_members, hub, cid)
                     clusters[cid].append(hub)
                     partition[hub] = cid
                     temp_modularity = self.calculate_modularity(partition.copy(), clusters, non_members)
+                    # print(f"[modularity] [hub {hub}] [cid {cid}] [delta {delta}] [real {temp_modularity - old_modularity}] [temp_modularity {temp_modularity}] [best_modularity {old_modularity}]")
                     # Remove the hub after testing
                     clusters[cid].remove(hub)
                     partition.pop(hub)
@@ -149,6 +181,7 @@ class GraphScan:
                     # print(f"[add] [{hub}] to [{best_cid}]")
                 else:
                     # If no better cluster is found, create a new cluster
+                    print(f"[new] [{hub}] to [{len(clusters) + 1}]")
                     new_cid = len(clusters) + 1
                     self.add_core(hub, clusters, new_cid)
                     partition[hub] = new_cid
