@@ -59,7 +59,11 @@ if __name__ == "__main__":
     parser.add_argument("--result", "-r", type=str, help="The path to save the result file.", default="")
     args = parser.parse_args()
 
-    network_file_path = args.networkFile
+    network_file = args.networkFile
+    if network_file in [str(i) for i in range(1, 11)]:
+        network_file = f"./data/TC1-{network_file}/1-{network_file}.dat"
+
+    network_file_path = network_file
     community_file_path = network_file_path.replace('.dat', '.cmty')
     if args.result != "":
         community_file_path = args.result

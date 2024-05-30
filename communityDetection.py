@@ -5,6 +5,7 @@ import numpy as np
 import argparse
 import enum
 import queue
+import os
 
 from sklearn.metrics.cluster import normalized_mutual_info_score
 
@@ -168,7 +169,7 @@ class GraphScan:
                 for cid in belong:
                     # Temporarily add the hub to this cluster and calculate the modularity
                     delta, in_degree_new, tot_degree_new = self.calculate_modularity_change(clusters, cache, hub, cid)
-                    print(f"[delta] [{hub}] [{cid}] [{delta}] [{best_delta}]")
+                    # print(f"[delta] [{hub}] [{cid}] [{delta}] [{best_delta}]")
                     if delta > best_delta:
                         best_delta = delta
                         best_cid = cid
@@ -179,7 +180,7 @@ class GraphScan:
                     cache[best_cid] = (best_in, best_tot)
                 else:
                     # If no better cluster is found, create a new cluster
-                    print(f"[new] [{hub}] to [{len(clusters) + 1}]")
+                    # print(f"[new] [{hub}] to [{len(clusters) + 1}]")
                     new_cid = len(clusters) + 1
                     self.add_core(hub, clusters, new_cid)
     
@@ -222,7 +223,7 @@ class GraphScan:
                 continue
             nbrs = self.epsilon_neighborhood(node)
             # Check if node is core
-            if len(nbrs) > self.core_threshold:
+            if len(nbrs) >= self.core_threshold:
                 cid += 1
                 self.add_core(node, clusters, cid)
                 q = queue.Queue()
@@ -306,6 +307,7 @@ def save_communities_to_file(communities: List[List[int]], file_path: str):
         for node, community_id in sorted_community_items:
             f.write(f"{node} {community_id}\n")
 
+import matplotlib.pyplot as plt
 
 class ParameterAdjustment:
     def __init__(self, G: nx.Graph):
@@ -313,7 +315,7 @@ class ParameterAdjustment:
         self.epsilon = 0.0
         self.core_threshold = 0
     
-    def heuristic(self) -> Tuple[float, int]:
+    def heuristic(self, id: str) -> Tuple[float, int]:
         # partition = community_louvain.best_partition(self.G)
         # community_to_nodes: Dict[int, List[int]] = {}
         # for node, community in partition.items():
@@ -339,7 +341,12 @@ class ParameterAdjustment:
                 eps = val[2]
                 eps_list.append(eps)
         eps_list.sort()
-        epsilon = eps_list[int(len(eps_list) * 0.25)]
+        plt.xlabel("epsilon")
+        plt.ylabel("similarity")
+        plt.plot(range(len(eps_list)), eps_list, 'bx-')
+        os.makedirs("tmp", exist_ok=True)
+        plt.savefig(f"tmp/similarity-{id}.png")
+        epsilon = eps_list[int(len(eps_list) * 0.6)]
         print(f"[epsilon] [{epsilon}]")
         return epsilon, 3
 
@@ -379,17 +386,21 @@ if __name__ == "__main__":
     parser.add_argument("--useModularity", "-u", action="store_true", help="Use modularity for GraphScan.")
     args = parser.parse_args()
 
-    community_file_path = args.networkFile.replace('.dat', '.cmty')
+    network_file = args.networkFile
+    if network_file in [str(i) for i in range(1, 11)]:
+        network_file = f"./data/TC1-{network_file}/1-{network_file}.dat"
+
+    community_file_path = network_file.replace('.dat', '.cmty')
     if args.out != "":
         community_file_path = args.out
 
-    G = load_network(args.networkFile)
+    G = load_network(network_file)
 
     # Detect communities using Louvain method
     if args.method == "scan":
         pa = ParameterAdjustment(G)
-        # epsilon, core_threshlod = pa.heuristic()
-        epsilon, core_threshlod = 0.25, 3
+        epsilon, core_threshlod = pa.heuristic(args.networkFile.replace("/", "_"))
+        # epsilon, core_threshlod = 0.27, 3
         gs = GraphScan(G, epsilon=epsilon, core_threshold=core_threshlod, use_modularity=True)
         detected_communities = gs.detect_communities()
     else:
