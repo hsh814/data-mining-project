@@ -307,7 +307,7 @@ def save_communities_to_file(communities: List[List[int]], file_path: str):
         for node, community_id in sorted_community_items:
             f.write(f"{node} {community_id}\n")
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 class ParameterAdjustment:
     def __init__(self, G: nx.Graph):
@@ -315,40 +315,89 @@ class ParameterAdjustment:
         self.epsilon = 0.0
         self.core_threshold = 0
     
+    def similarity(self, a: int, b: int) -> float:
+        a_neighbors = set(self.G.neighbors(a))
+        b_neighbors = set(self.G.neighbors(b))
+        inter = a_neighbors.intersection(b_neighbors)
+        if len(inter) == 0:
+            return 0
+        return (len(inter) + 2) / (np.sqrt((len(a_neighbors) + 1) * len(b_neighbors) + 1))
+    
     def heuristic(self, id: str) -> Tuple[float, int]:
-        # partition = community_louvain.best_partition(self.G)
-        # community_to_nodes: Dict[int, List[int]] = {}
-        # for node, community in partition.items():
-        #     if community not in community_to_nodes:
-        #         community_to_nodes[community] = []
-        #     community_to_nodes[community].append(node)
+        partition = community_louvain.best_partition(self.G)
+        community_to_nodes: Dict[int, List[int]] = {}
+        for node, community in partition.items():
+            if community not in community_to_nodes:
+                community_to_nodes[community] = []
+            community_to_nodes[community].append(node)
+        cluster_num = len(community_to_nodes)
         # find proper epsilon
         epsilon = 0.0
-        gs = GraphScan(self.G.copy(), epsilon=epsilon, core_threshold=3, use_modularity=False)
-        eps_dict: Dict[int, List[float]] = dict()
-        for node in gs.G.nodes():
-            for n in gs.get_neighbors(node):
-                sim = gs.similarity(node, n)
-                if node not in eps_dict:
-                    eps_dict[node] = list()
-                eps_dict[node].append(sim)
-        # sort the similarities
-        eps_list = list()
-        for node, val in eps_dict.items():
-            val.sort(reverse=True)
-            core = len(val)
-            if core >= 3:
-                eps = val[2]
-                eps_list.append(eps)
-        eps_list.sort()
-        plt.xlabel("epsilon")
-        plt.ylabel("similarity")
-        plt.plot(range(len(eps_list)), eps_list, 'bx-')
-        os.makedirs("tmp", exist_ok=True)
-        plt.savefig(f"tmp/similarity-{id}.png")
-        epsilon = eps_list[int(len(eps_list) * 0.6)]
-        print(f"[epsilon] [{epsilon}]")
-        return epsilon, 3
+        tot_sim = 0.0
+        sim_cnt = 0
+        tot_deg = 0
+        tot_node = 0
+        deg_list = list()
+        sim_list = list()
+        sim_map = dict()
+        for i in range(5):
+            sim_map[i] = list()
+        for community, nodes in community_to_nodes.items():
+            node_set = set(nodes)
+            for node in nodes:
+                tot_node += 1
+                deg = 0
+                sims = list()
+                for n in self.G.neighbors(node):
+                    if n in node_set:
+                        tmp = self.similarity(node, n)
+                        sim_cnt += 1
+                        tot_sim += tmp
+                        tot_deg += 1
+                        deg += 1
+                        sims.append(tmp)
+                deg_list.append(deg)
+                sims.sort(reverse=True)
+                for i in range(5):
+                    if len(sims) > i:
+                        sim_map[i].append(sims[i])
+                    else:
+                        sim_map[i].append(0.0)
+        avg_sim = tot_sim / sim_cnt
+        avg_deg = tot_deg / tot_node
+        print(f"[param] [avg_sim {avg_sim}] [avg_deg {avg_deg}]")
+        # find proper epsilon
+        epsilon = avg_sim + 0.01
+        core_threshold = avg_deg
+        for c in range(4, -1, -1):
+            cutoff = 0.01
+            sim_map[c].sort()
+            eps_list = list()
+            for i in sim_map[c]:
+                if i > cutoff:
+                    eps_list.append(i)
+            epsilon = eps_list[int(len(eps_list) * 0.5)]
+            print(f"[core] [c {c}] [eps {epsilon}] [cutoff {len(eps_list)}] [tot {len(sim_map[c])}]")
+            if len(eps_list) > 0.75 * len(sim_map[c]) or c == 0:
+                core_threshold = c
+                sim_list = eps_list
+                break
+        sim_list.sort()
+        deg_list.sort()
+        # plt.xlabel("epsilon")
+        # plt.ylabel("similarity")
+        # plt.plot(range(len(sim_list)), sim_list, 'bx-')
+        # os.makedirs("tmp", exist_ok=True)
+        # plt.savefig(f"tmp/similarity-{id}.png")
+        # plt.clf()
+        # plt.xlabel("deg")
+        # plt.ylabel("deg")
+        # plt.plot(range(len(deg_list)), deg_list, 'bx-')
+        # os.makedirs("tmp", exist_ok=True)
+        # plt.savefig(f"tmp/deg-{id}.png")
+        # # epsilon = eps_list[int(len(eps_list) * 0.6)]
+        print(len(sim_list), len(deg_list))
+        return sim_list[int(len(sim_list) * 0.6321)], core_threshold + 1 # deg_list[int(len(deg_list) * 0.2)]
 
     def find_parameters(self):
         max_modularity = 0.0
@@ -400,7 +449,7 @@ if __name__ == "__main__":
     if args.method == "scan":
         pa = ParameterAdjustment(G)
         epsilon, core_threshlod = pa.heuristic(args.networkFile.replace("/", "_"))
-        # epsilon, core_threshlod = 0.27, 3
+        # epsilon, core_threshlod = 0.17, 4
         gs = GraphScan(G, epsilon=epsilon, core_threshold=core_threshlod, use_modularity=True)
         detected_communities = gs.detect_communities()
     else:
