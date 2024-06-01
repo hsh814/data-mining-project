@@ -42,7 +42,6 @@ class GraphScan:
         self.total_nodes = G.number_of_nodes()
         self.total_edges = G.number_of_edges()
         self.total_degree = self.total_edges * 2
-        print(self.total_degree, self.total_nodes, self.total_edges)
         print(f"[init] [epsilon {epsilon}] [core_threshold {core_threshold}] [use_modularity {use_modularity}]")
         
     def get_neighbors(self, node: int) -> Set[int]:
@@ -307,7 +306,7 @@ def save_communities_to_file(communities: List[List[int]], file_path: str):
         for node, community_id in sorted_community_items:
             f.write(f"{node} {community_id}\n")
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 class ParameterAdjustment:
     G: nx.Graph
@@ -341,6 +340,35 @@ class ParameterAdjustment:
             for node in nodes:
                 partition[node] = cid
         return community_louvain.modularity(partition, G)
+    
+    def get_sim(self, sim_list: List[float], ratio: float) -> float:
+        return sim_list[int(len(sim_list) * ratio)]
+    
+    def binary_search(self, core_threshold: int, start: float, end: float, mid: float, sim_list: List[float], cache: Dict[float, float]) -> float:
+        if abs(start - end) < 0.01:
+            return mid
+        if start in cache:
+            start_modularity = cache[start]
+        else:
+            start_modularity = self.try_parameters(self.get_sim(sim_list, start), core_threshold)
+            cache[start] = start_modularity
+        if end in cache:
+            end_modularity = cache[end]
+        else:
+            end_modularity = self.try_parameters(self.get_sim(sim_list, end), core_threshold)
+            cache[end] = end_modularity
+        if mid in cache:
+            mid_modularity = cache[mid]
+        else:
+            mid_modularity = self.try_parameters(self.get_sim(sim_list, mid), core_threshold)
+            cache[mid] = mid_modularity
+        mid_left = (start + mid) / 2
+        mid_right = (mid + end) / 2
+        if mid_modularity > start_modularity and mid_modularity > end_modularity:
+            return self.binary_search(core_threshold, mid_left, mid_right, mid, sim_list, cache)
+        if start_modularity > end_modularity:
+            return self.binary_search(core_threshold, start, mid, mid_left, sim_list, cache)
+        return self.binary_search(core_threshold, mid, end, mid_right, sim_list, cache)
 
     def heuristic_modularity(self, id: str) -> Tuple[float, int]:
         epsilon = 0.0
@@ -382,37 +410,43 @@ class ParameterAdjustment:
         modularity = 0.0
         best_epsilon = 0.0
         best_point = 0.0
-        mod_map = dict()
-        start = 0.1
-        end = 1.0
-        no_update_prev = False
-        for i in self.get_range(start, end, 0.1):
+        cache = dict()
+        # best_epsilon = self.binary_search(core_threshold, 0.2, 0.8, 0.5, eps_list, cache)
+        for i in self.get_range(0.2, 0.9, 0.1):
             epsilon = eps_list[int(len(eps_list) * i)]
             print(f"[try] [epsilon] [at {i}] [eps {epsilon}]")
             local_modularity = self.try_parameters(epsilon, core_threshold)
-            mod_map[i] = epsilon, local_modularity
+            cache[i] = local_modularity
             print(f"[iter] [i {i}] [epsilon {best_epsilon}] [modularity {modularity}]")
             if local_modularity > modularity:
                 print(f"[update] [epsilon] [at {i}] [eps {epsilon}] [modularity {local_modularity}]")
                 modularity = local_modularity
                 best_epsilon = epsilon
                 best_point = i
-                no_update_prev = False
             else:
-                if no_update_prev:
-                    break
-                no_update_prev = True
+                break
         # try to find the best epsilon on the left
-        for i in [best_point - 0.05, best_point + 0.05]:
-            epsilon = eps_list[int(len(eps_list) * i)]
-            print(f"[try] [epsilon] [at {i}] [eps {epsilon}]")
-            local_modularity = self.try_parameters(epsilon, core_threshold)
-            if local_modularity > modularity:
-                print(f"[update] [epsilon] [at {i}] [eps {epsilon}] [modularity {local_modularity}]")
-                modularity = local_modularity
-                best_epsilon = epsilon
-                best_point = i
+        best_point = self.binary_search(core_threshold, best_point - 0.1, best_point + 0.1, best_point, eps_list, cache)
+        # for i in [best_point - 0.05, best_point + 0.05]:
+        #     epsilon = eps_list[int(len(eps_list) * i)]
+        #     print(f"[try] [epsilon] [at {i}] [eps {epsilon}]")
+        #     local_modularity = self.try_parameters(epsilon, core_threshold)
+        #     if local_modularity > modularity:
+        #         print(f"[update] [epsilon] [at {i}] [eps {epsilon}] [modularity {local_modularity}]")
+        #         modularity = local_modularity
+        #         best_epsilon = epsilon
+        #         best_point = i
+        x_list = list(cache.keys())
+        x_list.sort()
+        y_list = list()
+        for x in x_list:
+            y_list.append(cache[x])
         print(f"[epsilon] [{best_epsilon}]")
+        plt.xlabel("similarity selection ratio")
+        plt.ylabel("modularity")
+        plt.plot(x_list, y_list, 'bx-')
+        os.makedirs("tmp", exist_ok=True)
+        plt.savefig(f"tmp/modularity-{id}.png")
         return best_epsilon, core_threshold
     
     def heuristic(self, id: str) -> Tuple[float, int]:
