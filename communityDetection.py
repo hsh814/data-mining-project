@@ -326,6 +326,22 @@ class ParameterAdjustment:
             return 0
         return (len(inter) + 2) / (np.sqrt((len(a_neighbors) + 1) * len(b_neighbors) + 1))
     
+    def get_range(self, start: float, end: float, step: float) -> List[float]:
+        res = list()
+        while start < end:
+            res.append(start)
+            start += step
+        return res
+    
+    def try_parameters(self, epsilon: float, core_threshold: int) -> Tuple[float]:
+        gs = GraphScan(self.G.copy(), epsilon=epsilon, core_threshold=core_threshold, use_modularity=True)
+        detected_communities = gs.detect_communities()
+        partition = {}
+        for cid, nodes in enumerate(detected_communities):
+            for node in nodes:
+                partition[node] = cid
+        return community_louvain.modularity(partition, G)
+
     def heuristic_modularity(self, id: str) -> Tuple[float, int]:
         epsilon = 0.0
         gs = GraphScan(self.G.copy(), epsilon=epsilon, core_threshold=3, use_modularity=False)
@@ -365,21 +381,37 @@ class ParameterAdjustment:
         core_threshold += 1
         modularity = 0.0
         best_epsilon = 0.0
-        for i in [0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75]:
+        best_point = 0.0
+        mod_map = dict()
+        start = 0.1
+        end = 1.0
+        no_update_prev = False
+        for i in self.get_range(start, end, 0.1):
             epsilon = eps_list[int(len(eps_list) * i)]
             print(f"[try] [epsilon] [at {i}] [eps {epsilon}]")
-            gs = GraphScan(self.G.copy(), epsilon=epsilon, core_threshold=core_threshold, use_modularity=True)
-            detected_communities = gs.detect_communities()
-            partition = {}
-            for cid, nodes in enumerate(detected_communities):
-                for node in nodes:
-                    partition[node] = cid
-            local_modularity = community_louvain.modularity(partition, G)
+            local_modularity = self.try_parameters(epsilon, core_threshold)
+            mod_map[i] = epsilon, local_modularity
+            print(f"[iter] [i {i}] [epsilon {best_epsilon}] [modularity {modularity}]")
             if local_modularity > modularity:
+                print(f"[update] [epsilon] [at {i}] [eps {epsilon}] [modularity {local_modularity}]")
                 modularity = local_modularity
                 best_epsilon = epsilon
-                print(f"[update] [i {i}] [epsilon {best_epsilon}] [modularity {modularity}]")
-            print(f"[best] [epsilon {best_epsilon}] [core_threshold {core_threshold}] [modularity {modularity}]")
+                best_point = i
+                no_update_prev = False
+            else:
+                if no_update_prev:
+                    break
+                no_update_prev = True
+        # try to find the best epsilon on the left
+        for i in [best_point - 0.05, best_point + 0.05]:
+            epsilon = eps_list[int(len(eps_list) * i)]
+            print(f"[try] [epsilon] [at {i}] [eps {epsilon}]")
+            local_modularity = self.try_parameters(epsilon, core_threshold)
+            if local_modularity > modularity:
+                print(f"[update] [epsilon] [at {i}] [eps {epsilon}] [modularity {local_modularity}]")
+                modularity = local_modularity
+                best_epsilon = epsilon
+                best_point = i
         print(f"[epsilon] [{best_epsilon}]")
         return best_epsilon, core_threshold
     
