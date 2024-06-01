@@ -310,6 +310,9 @@ def save_communities_to_file(communities: List[List[int]], file_path: str):
 # import matplotlib.pyplot as plt
 
 class ParameterAdjustment:
+    G: nx.Graph
+    epsilon: float
+    core_threshold: int
     def __init__(self, G: nx.Graph):
         self.G = G
         self.epsilon = 0.0
@@ -322,6 +325,63 @@ class ParameterAdjustment:
         if len(inter) == 0:
             return 0
         return (len(inter) + 2) / (np.sqrt((len(a_neighbors) + 1) * len(b_neighbors) + 1))
+    
+    def heuristic_modularity(self, id: str) -> Tuple[float, int]:
+        epsilon = 0.0
+        gs = GraphScan(self.G.copy(), epsilon=epsilon, core_threshold=3, use_modularity=False)
+        eps_dict: Dict[int, List[float]] = dict()
+        for node in gs.G.nodes():
+            for n in gs.get_neighbors(node):
+                sim = gs.similarity(node, n)
+                if node not in eps_dict:
+                    eps_dict[node] = list()
+                eps_dict[node].append(sim)
+        # sort the similarities
+        eps_map = dict()
+        for node, val in eps_dict.items():
+            val.sort(reverse=True)
+            for i in range(5):
+                if i not in eps_map:
+                    eps_map[i] = list()
+                if len(val) > i:
+                    eps_map[i].append(val[i])
+                else:
+                    eps_map[i].append(0.0)
+        core_threshold = 0
+        node_num = len(self.G.nodes)
+        eps_list = list()
+        for i in range(5):
+            core = 5 - 1 - i
+            cutoff = 0.01
+            eps_list = list()
+            for j in eps_map[core]:
+                if j > cutoff:
+                    eps_list.append(j)
+            eps_list.sort()
+            if len(eps_list) > 0.75 * node_num:
+                core_threshold = core
+                break
+        # epsilon = eps_list[int(len(eps_list) * 0.6)]
+        core_threshold += 1
+        modularity = 0.0
+        best_epsilon = 0.0
+        for i in [0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75]:
+            epsilon = eps_list[int(len(eps_list) * i)]
+            print(f"[try] [epsilon] [at {i}] [eps {epsilon}]")
+            gs = GraphScan(self.G.copy(), epsilon=epsilon, core_threshold=core_threshold, use_modularity=True)
+            detected_communities = gs.detect_communities()
+            partition = {}
+            for cid, nodes in enumerate(detected_communities):
+                for node in nodes:
+                    partition[node] = cid
+            local_modularity = community_louvain.modularity(partition, G)
+            if local_modularity > modularity:
+                modularity = local_modularity
+                best_epsilon = epsilon
+                print(f"[update] [i {i}] [epsilon {best_epsilon}] [modularity {modularity}]")
+            print(f"[best] [epsilon {best_epsilon}] [core_threshold {core_threshold}] [modularity {modularity}]")
+        print(f"[epsilon] [{best_epsilon}]")
+        return best_epsilon, core_threshold
     
     def heuristic(self, id: str) -> Tuple[float, int]:
         partition = community_louvain.best_partition(self.G)
@@ -448,9 +508,8 @@ if __name__ == "__main__":
     # Detect communities using Louvain method
     if args.method == "scan":
         pa = ParameterAdjustment(G)
-        epsilon, core_threshlod = pa.heuristic(args.networkFile.replace("/", "_"))
-        # epsilon, core_threshlod = 0.17, 4
-        gs = GraphScan(G, epsilon=epsilon, core_threshold=core_threshlod, use_modularity=True)
+        epsilon, core_threshold = pa.heuristic_modularity(args.networkFile.replace("/", "_"))
+        gs = GraphScan(G, epsilon=epsilon, core_threshold=core_threshold, use_modularity=True)
         detected_communities = gs.detect_communities()
     else:
         # Detect communities using Louvain method
