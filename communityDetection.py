@@ -306,7 +306,7 @@ def save_communities_to_file(communities: List[List[int]], file_path: str):
         for node, community_id in sorted_community_items:
             f.write(f"{node} {community_id}\n")
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 class ParameterAdjustment:
     G: nx.Graph
@@ -412,7 +412,7 @@ class ParameterAdjustment:
         best_point = 0.0
         cache = dict()
         # best_epsilon = self.binary_search(core_threshold, 0.2, 0.8, 0.5, eps_list, cache)
-        for i in self.get_range(0.2, 0.9, 0.1):
+        for i in self.get_range(0.1, 1.0, 0.1):
             epsilon = eps_list[int(len(eps_list) * i)]
             print(f"[try] [epsilon] [at {i}] [eps {epsilon}]")
             local_modularity = self.try_parameters(epsilon, core_threshold)
@@ -436,17 +436,17 @@ class ParameterAdjustment:
         #         modularity = local_modularity
         #         best_epsilon = epsilon
         #         best_point = i
-        x_list = list(cache.keys())
-        x_list.sort()
-        y_list = list()
-        for x in x_list:
-            y_list.append(cache[x])
-        print(f"[epsilon] [{best_epsilon}]")
-        plt.xlabel("similarity selection ratio")
-        plt.ylabel("modularity")
-        plt.plot(x_list, y_list, 'bx-')
-        os.makedirs("tmp", exist_ok=True)
-        plt.savefig(f"tmp/modularity-{id}.png")
+        # x_list = list(cache.keys())
+        # x_list.sort()
+        # y_list = list()
+        # for x in x_list:
+        #     y_list.append(cache[x])
+        # print(f"[epsilon] [{best_epsilon}]")
+        # plt.xlabel("similarity selection ratio")
+        # plt.ylabel("modularity")
+        # plt.plot(x_list, y_list, 'bx-')
+        # os.makedirs("tmp", exist_ok=True)
+        # plt.savefig(f"tmp/modularity-{id}.png")
         return best_epsilon, core_threshold
     
     def heuristic(self, id: str) -> Tuple[float, int]:
